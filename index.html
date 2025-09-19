@@ -531,7 +531,7 @@ const menuItems = [
     );
 };
 
-                const Vendas = () => {
+                const Vendas = ({ user }) => {
                 const [cart, setCart] = React.useState([]);
                 const [products, setProducts] = React.useState(getData('graphica_products'));
                 const [paymentMethod, setPaymentMethod] = React.useState('dinheiro');
@@ -566,6 +566,12 @@ const menuItems = [
                 setCart(cart.filter(item => item.id !== id));
             };
 
+            const caixaAberto = getData('graphica_caixa_status');
+    if (!caixaAberto) {
+        alert('O caixa precisa estar aberto para realizar uma venda');
+        return;
+    }
+
            const updateQuantity = (id, quantity) => {
     if (quantity === 0) {
         removeFromCart(id);
@@ -581,29 +587,40 @@ const menuItems = [
             };
 
                const finalizeSale = () => {
-    if (cart.length === 0) {
-        alert('Adicione produtos ao carrinho antes de finalizar a venda');
-        return;
-    }
+        if (cart.length === 0) {
+            alert('Adicione produtos ao carrinho antes de finalizar a venda');
+            return;
+        }
 
-                
-                setProducts(updatedProducts);
-                saveData('graphica_products', updatedProducts);
-                
-                // Registrar venda
-                const sales = getData('graphica_sales');
-                    const newSale = {
-                        id: sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1,
-                        date: new Date().toISOString(),
-                        items: cart,
-                        total: getTotal(),
-                        paymentMethod,
-                        note: saleNote
-                    };
-                
-                saveData('graphica_sales', [...sales, newSale]);
-                
-                // Limpar carrinho e formulário
+    // Verificar se o caixa está aberto
+    const caixaAberto = getData('graphica_caixa_status');
+        if (!caixaAberto) {
+            alert('O caixa precisa estar aberto para realizar uma venda');
+            return;
+        }
+
+    // Registrar venda
+    const sales = getData('graphica_sales') || [];
+        const newSale = {
+            id: sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1,
+            date: new Date().toISOString(),
+            items: cart.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity
+            })),
+            total: getTotal(),
+            paymentMethod,
+            note: saleNote,
+            employee: user.name, // Adicionar o nome do funcionário
+            employeeId: user.id   // Adicionar o ID do funcionário
+        };
+    
+    // Salvar a venda
+    saveData('graphica_sales', [...sales, newSale]);
+    
+    // Limpar carrinho e formulário
     setCart([]);
     setPaymentMethod('dinheiro');
     setSaleNote('');
@@ -1186,31 +1203,25 @@ const Produtos = () => {
                 .slice(0, 5);
                 
             React.useEffect(() => {
-                // Gráfico de vendas por categoria
-                const categories = {};
-                products.forEach(product => {
-                    if (!categories[product.category]) {
-                        categories[product.category] = 0;
-                    }
-                });
-                
+                // Vendas por funcionário
+                const salesByEmployee = {};
+    
                 filteredSales.forEach(sale => {
-                    sale.items.forEach(item => {
-                        const product = products.find(p => p.id === item.id);
-                        if (product && categories[product.category] !== undefined) {
-                            categories[product.category] += item.quantity;
-                        }
-                    });
+                    const employee = sale.employee || 'Não especificado';
+                    if (!salesByEmployee[employee]) {
+                        salesByEmployee[employee] = 0;
+                    }
+                    salesByEmployee[employee] += sale.total;
                 });
-                
+
                 const ctx = document.getElementById('categoryChart');
                 if (ctx) {
                     new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: Object.keys(categories),
+                            labels: Object.keys(salesByEmployee),
                             datasets: [{
-                                data: Object.values(categories),
+                                data: Object.values(salesByEmployee),
                                 backgroundColor: [
                                     '#3498db',
                                     '#2ecc71',
@@ -1225,13 +1236,17 @@ const Produtos = () => {
                             plugins: {
                                 legend: {
                                     position: 'bottom'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Vendas por Funcionário'
                                 }
                             }
                         }
                     });
                 }
-            }, [filteredSales, products]);
-            
+            }, [filteredSales]);
+
             return (
                 <div>
                     <h2 className="section-title">Relatórios</h2>
@@ -1335,7 +1350,7 @@ const Produtos = () => {
                         <div className="col-md-6 mb-4">
                             <div className="card">
                                 <div className="card-header bg-white">
-                                    <h5 className="card-title">Vendas por Categoria</h5>
+                                    <h5 className="card-title">Vendas por Funcionário</h5>
                                 </div>
                                 <div className="card-body">
                                     <canvas id="categoryChart" height="250"></canvas>
@@ -1600,6 +1615,62 @@ const Produtos = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <div className="row mt-4">
+    <div className="col-12">
+        <div className="card border-danger">
+            <div className="card-header bg-danger text-white">
+                <h5 className="card-title mb-0">
+                    <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                    Zona de Perigo
+                </h5>
+            </div>
+            <div className="card-body">
+                <div className="row">
+                    <div className="col-md-6 mb-3">
+                        <div className="d-grid">
+                            <button 
+                                className="btn btn-outline-danger btn-lg"
+                                onClick={() => {
+                                    if (window.confirm('⚠️ ATENÇÃO: Isso irá apagar TODAS as vendas! Tem certeza?')) {
+                                        saveData('graphica_sales', []);
+                                        alert('Todas as vendas foram apagadas!');
+                                    }
+                                }}
+                            >
+                                <i className="bi bi-trash3 me-2"></i>
+                                Apagar Todas as Vendas
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                        <div className="d-grid">
+                            <button 
+                                className="btn btn-outline-danger btn-lg"
+                                onClick={() => {
+                                    if (window.confirm('⚠️ ATENÇÃO: Isso irá apagar TODOS os registros de caixa! Tem certeza?')) {
+                                        saveData('graphica_registros_caixa', []);
+                                        saveData('graphica_caixa_status', false);
+                                        alert('Todos os registros de caixa foram apagados!');
+                                    }
+                                }}
+                            >
+                                <i className="bi bi-trash3 me-2"></i>
+                                Apagar Registros de Caixa
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="alert alert-warning mt-3">
+                    <i className="bi bi-exclamation-circle me-2"></i>
+                    <strong>Aviso:</strong> Estas ações são irreversíveis e devem ser usadas apenas em ambiente de teste!
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
                         </div>
                     </div>
                     
@@ -2047,18 +2118,19 @@ const Produtos = () => {
             };
             
             if (!user) {
+
                 return <Login onLogin={handleLogin} />;
             }
-            
+
             // Atualizar renderContent
-                    const renderContent = () => {
-                        switch (activeSection) {
-                            case 'dashboard':
-                                return <Dashboard />;
-                            case 'vendas':
-                                return <Vendas />;
-                            case 'produtos':
-                                return <Produtos />; // Removida a restrição de admin
+  const renderContent = () => {
+    switch (activeSection) {
+        case 'dashboard':
+            return <Dashboard />;
+        case 'vendas':
+            return <Vendas user={user} />; // Passar o user como prop
+        case 'produtos':
+            return <Produtos />;
                             case 'relatorio-caixa':
                                 return user.role === 'admin' ? <RelatorioCaixa /> : <div className="alert alert-danger">Acesso não autorizado</div>;
                             case 'relatorios':
