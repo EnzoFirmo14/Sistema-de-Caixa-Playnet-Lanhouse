@@ -49,7 +49,7 @@ Um sistema de ponto de venda (PDV) desenvolvido para gráficas, com foco em simp
 
 1. Clone o repositório:
      ```bash
-     git clone https://github.com/seu-usuario/seu-repositorio.git
+     git clone https://github.com/EnzoFirmo14/Sistema-de-Caixa-Playnet-Lanhouse/
      ```
 2. Abra o arquivo `index.html` no navegador.
 3. Faça login com suas credenciais. (admin / admin123)
